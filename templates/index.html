@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Comprehensive Clinical Vision & Annotation Workspace</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --accent-color: #6366f1;
+            --accent-hover: #4f46e5;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+        header { background-color: var(--bg-secondary); padding: 1rem 2rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .container { flex: 1; max-width: 1600px; width: 100%; margin: 0 auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+        .tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); }
+        .tab-btn { background: none; border: none; color: var(--text-muted); padding: 1rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab-btn.active { color: var(--accent-color); border-bottom-color: var(--accent-color); }
+        .tab-content { display: none; animation: fadeIn 0.2s ease-in-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .workspace-grid { display: grid; grid-template-columns: 350px 1fr; gap: 1.5rem; align-items: start; }
+        .panel { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1.25rem; }
+        .panel-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+        
+        /* Annotator directory layout scroll list */
+        .file-list { list-style: none; max-height: 480px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 0.25rem; background: var(--bg-primary); margin-bottom: 0.5rem; }
+        .file-item { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color); cursor: pointer; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; word-break: break-all; }
+        .file-item:hover { background: var(--border-color); }
+        .file-item.active { background: var(--accent-color); color: white; }
+        
+        .canvas-container { position: relative; background: #000; border: 2px solid var(--border-color); border-radius: 0.25rem; }
+        #backgroundCanvas { display: block; position: relative; z-index: 1; }
+        #annotationCanvas { display: block; position: absolute; top: 0; left: 0; z-index: 2; cursor: crosshair; background: transparent; }
+        
+        .display-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .view-card { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; text-align: center; }
+        .view-card h4 { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; text-align: left; }
+        .img-wrapper { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; min-height: 450px; border-radius: 0.25rem; overflow: hidden; position: relative; }
+        .img-wrapper img { max-width: 100%; max-height: 500px; object-fit: contain; }
+        
+        .btn-action { display: block; width: 100%; background: var(--accent-color); color: white; border: none; padding: 0.7rem; border-radius: 0.25rem; font-weight: 600; cursor: pointer; margin-top: 0.75rem; text-align: center; font-size: 0.9rem; }
+        .btn-action:hover { background: var(--accent-hover); }
+        .btn-action:disabled { background: var(--border-color); cursor: not-allowed; opacity: 0.6; }
+        
+        .picker-box { background: var(--bg-primary); border: 1px solid var(--border-color); padding: 1rem; border-radius: 0.375rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .picker-input { background: var(--bg-secondary); border: 1px solid var(--border-color); color: white; padding: 0.5rem; border-radius: 0.25rem; font-size: 0.85rem; width: 100%; }
+
+        /* File input container styling fields */
+        .file-picker-container { position: relative; margin: 0.5rem 0; text-align: center; }
+        .hidden-file-input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 5; }
+        .dropzone-label { display: block; border: 2px dashed var(--border-color); border-radius: 0.375rem; padding: 2.5rem 1rem; background: var(--bg-primary); color: var(--text-muted); font-size: 0.85rem; transition: all 0.2s ease-in-out; }
+        .hidden-file-input:hover + .dropzone-label { border-color: var(--accent-color); color: var(--text-main); background: rgba(99, 102, 241, 0.05); }
+
+        .metrics-table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; font-size: 0.85rem; }
+        .metrics-table th, .metrics-table td { text-align: left; padding: 0.4rem 0; }
+        .metrics-table td.val { text-align: right; font-weight: bold; color: var(--accent-color); }
+        .alert-banner { background: rgba(99, 102, 241, 0.15); border: 1px solid var(--accent-color); padding: 0.6rem; text-align: center; border-radius: 0.25rem; font-size: 0.9rem; font-weight: bold; margin-top: 0.75rem; }
+        .status-badge { font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-weight: bold; }
+        .status-saved { background: var(--success-color); color: white; }
+        .status-unsaved { background: var(--error-color); color: white; }
+        .loading-spinner { border: 3px solid var(--border-color); border-top: 3px solid var(--accent-color); border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; display: none; position: absolute; top: 45%; left: 45%; z-index: 10; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>Liver Cirrhosis Detection</h2>
+        <div>Workspace Node: Active</div>
+    </header>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab(event, 'manual-annotator')">Annotator</button>
+            <button class="tab-btn" onclick="switchTab(event, 'classification')">Classification</button>
+            <button class="tab-btn" onclick="switchTab(event, 'detection')">Detection</button>
+            <button class="tab-btn" onclick="switchTab(event, 'segmentation')">Segmentation</button>
+        </div>
+
+        <div id="manual-annotator" class="tab-content active">
+            <div class="workspace-grid">
+                <div class="panel">
+                    <div class="panel-title">mri_slices Target Dataset</div>
+                    <ul id="annotator-file-list" class="file-list"></ul>
+                    
+                    <div class="panel-title" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">Target Classification Parameter</div>
+                    <select id="label-select" class="picker-input" style="margin-bottom:0.5rem;">
+                        <option value="0">Healthy (ID: 0)</option>
+                        <option value="1">Mild Cirrhosis (ID: 1)</option>
+                        <option value="2">Moderate Cirrhosis (ID: 2)</option>
+                        <option value="3">Severe Cirrhosis (ID: 3)</option>
+                        <option value="NEW_CUSTOM_LABEL">➕ Create Custom Label Variant...</option>
+                    </select>
+                    <button id="btn-save-anno" class="btn-action" onclick="saveActiveAnnotations()" style="background: var(--success-color)">Commit Annotations to Disk</button>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-title">Interactive Drawing Board Workspace</div>
+                    <div class="display-grid">
+                        <div class="view-card">
+                            <h4>Active Live Slice Array</h4>
+                            <div class="img-wrapper">
+                                <div class="canvas-container" id="canvasContainer">
+                                    <canvas id="backgroundCanvas"></canvas>
+                                    <canvas id="annotationCanvas"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="view-card">
+                            <h4>Dynamic Jet Thermal Map Lookup</h4>
+                            <div class="img-wrapper">
+                                <img id="thermal-view-img" src="" alt="Thermal View Map Instance">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="classification" class="tab-content">
+            <div class="workspace-grid">
+                <div class="panel">
+                    <div class="panel-title">Model Parameters</div>
+                    <div class="picker-box">
+                        <div class="file-picker-container">
+                            <input type="file" id="picker-classification" class="hidden-file-input" accept="image/*" onchange="handleLocalFileLoad('classification')">
+                            <div id="drop-label-classification" class="dropzone-label">Select Scan Target<br><span style="font-size:0.75rem; color:var(--text-muted)">Click to browse local files</span></div>
+                        </div>
+                        <button id="btn-run-classification" class="btn-action" onclick="triggerLocalInference('classification')">Execute Model Inference</button>
+                    </div>
+                    <div id="results-class" style="display:none; margin-top:1rem;">
+                        <div id="banner-class" class="alert-banner"></div>
+                        <table class="metrics-table" id="table-class"></table>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">Visualization Matrices</div>
+                    <div class="display-grid">
+                        <div class="view-card">
+                            <h4>Original Medical MRI</h4>
+                            <div class="img-wrapper">
+                                <img id="preview-classification-img" src="" alt="" style="display:none;">
+                            </div>
+                        </div>
+                        <div class="view-card">
+                            <h4>Inference Engine Output Window</h4>
+                            <div class="img-wrapper">
+                                <div id="spinner-classification" class="loading-spinner"></div>
+                                <img id="out-classification-img" src="" alt="" style="display:none;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="detection" class="tab-content">
+            <div class="workspace-grid">
+                <div class="panel">
+                    <div class="panel-title">Model Parameters</div>
+                    <div class="picker-box">
+                        <div class="file-picker-container">
+                            <input type="file" id="picker-detection" class="hidden-file-input" accept="image/*" onchange="handleLocalFileLoad('detection')">
+                            <div id="drop-label-detection" class="dropzone-label">Select Scan Target<br><span style="font-size:0.75rem; color:var(--text-muted)">Click to browse local files</span></div>
+                        </div>
+                        <button id="btn-run-detection" class="btn-action" onclick="triggerLocalInference('detection')">Execute Model Inference</button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">Visualization Matrices</div>
+                    <div class="display-grid">
+                        <div class="view-card">
+                            <h4>Original Medical MRI</h4>
+                            <div class="img-wrapper">
+                                <img id="preview-detection-img" src="" alt="" style="display:none;">
+                            </div>
+                        </div>
+                        <div class="view-card">
+                            <h4>Inference Engine Output Window</h4>
+                            <div class="img-wrapper">
+                                <div id="spinner-detection" class="loading-spinner"></div>
+                                <img id="out-detection-img" src="" alt="" style="display:none;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="segmentation" class="tab-content">
+            <div class="workspace-grid">
+                <div class="panel">
+                    <div class="panel-title">Model Parameters</div>
+                    <div class="picker-box">
+                        <div class="file-picker-container">
+                            <input type="file" id="picker-segmentation" class="hidden-file-input" accept="image/*" onchange="handleLocalFileLoad('segmentation')">
+                            <div id="drop-label-segmentation" class="dropzone-label">Select Scan Target<br><span style="font-size:0.75rem; color:var(--text-muted)">Click to browse local files</span></div>
+                        </div>
+                        <button id="btn-run-segmentation" class="btn-action" onclick="triggerLocalInference('segmentation')">Execute Model Inference</button>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">Visualization Matrices</div>
+                    <div class="display-grid">
+                        <div class="view-card">
+                            <h4>Original Medical MRI</h4>
+                            <div class="img-wrapper">
+                                <img id="preview-segmentation-img" src="" alt="" style="display:none;">
+                            </div>
+                        </div>
+                        <div class="view-card">
+                            <h4>Inference Engine Output Window</h4>
+                            <div class="img-wrapper">
+                                <div id="spinner-segmentation" class="loading-spinner"></div>
+                                <img id="out-segmentation-img" src="" alt="" style="display:none;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dbCache = {};
+        let activeImageName = "";
+        let activeBboxes = [];
+        let activeLabels = [];
+        let isSavingCommit = false;
+        
+        // Runtime variables tracking custom user label insertions
+        let localCustomLabelMap = {};
+        let customIndexCounter = 4; // Starts immediately following index keys 0,1,2,3
+
+        // Base64 storage caching strings
+        let localFilePayloads = { classification: "", detection: "", segmentation: "" };
+        
+        const bgCanvas = document.getElementById('backgroundCanvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        const annoCanvas = document.getElementById('annotationCanvas');
+        const annoCtx = annoCanvas.getContext('2d');
+        const containerBox = document.getElementById('canvasContainer');
+
+        let isDrawing = false;
+        let startX, startY;
+        let baseImageElement = new Image();
+
+        window.onload = function() {
+            loadAnnotatorFiles();
+            setupCustomLabelListener();
+        };
+
+        function switchTab(evt, tabId) {
+            const contents = document.getElementsByClassName("tab-content");
+            for (let i = 0; i < contents.length; i++) contents[i].classList.remove("active");
+            const btns = document.getElementsByClassName("tab-btn");
+            for (let i = 0; i < btns.length; i++) btns[i].classList.remove("active");
+            
+            document.getElementById(tabId).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+
+        // Monitors custom runtime label creation inside the drop-down selector row
+        function setupCustomLabelListener() {
+            const labelSelect = document.getElementById('label-select');
+            labelSelect.addEventListener('change', function() {
+                if (this.value === "NEW_CUSTOM_LABEL") {
+                    const customName = prompt("Enter Custom Target Class Variant Identifier Label String Name:");
+                    if (customName && customName.trim() !== "") {
+                        const cleanedName = customName.trim();
+                        const newId = customIndexCounter++;
+                        
+                        // Map variant reference inside local dictionary stack
+                        localCustomLabelMap[newId] = cleanedName;
+                        
+                        // Append choice node array node before the trigger element
+                        const opt = document.createElement('option');
+                        opt.value = newId;
+                        opt.innerText = `${cleanedName} (ID: ${newId})`;
+                        
+                        labelSelect.insertBefore(opt, labelSelect.lastElementChild);
+                        labelSelect.value = newId;
+                    } else {
+                        labelSelect.value = "0"; // Reset fallback execution on cancellation window
+                    }
+                }
+            });
+        }
+
+        // Handles rendering preview locally on the client side instantly
+        function handleLocalFileLoad(taskType) {
+            const input = document.getElementById(`picker-${taskType}`);
+            const label = document.getElementById(`drop-label-${taskType}`);
+            const previewImg = document.getElementById(`preview-${taskType}-img`);
+            const outputImg = document.getElementById(`out-${taskType}-img`);
+
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                label.innerHTML = `📄 ${file.name}`;
+                label.style.borderColor = "var(--success-color)";
+                
+                outputImg.style.display = "none";
+                if(taskType === 'classification') document.getElementById('results-class').style.display = "none";
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewImg.style.display = "block";
+                    localFilePayloads[taskType] = e.target.result.split(',')[1];
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // =====================================================================
+        // ANNOTATOR MANAGEMENT PIPELINE (Server-Side Context Tracking)
+        // =====================================================================
+        function loadAnnotatorFiles() {
+            fetch('/init-data')
+            .then(res => res.json())
+            .then(data => {
+                dbCache = data.db;
+                const container = document.getElementById('annotator-file-list');
+                container.innerHTML = "";
+                
+                if (!data.images || data.images.length === 0) {
+                    container.innerHTML = `<li class="file-item">No images found in mri_slices</li>`;
+                    return;
+                }
+
+                data.images.forEach((img, index) => {
+                    const savedState = img in dbCache;
+                    const li = document.createElement('li');
+                    li.className = `file-item ${index === 0 ? 'active' : ''}`;
+                    li.id = `anno-item-${img}`;
+                    li.innerHTML = `
+                        <span>${img}</span>
+                        <span class="status-badge ${savedState ? 'status-saved' : 'status-unsaved'}">
+                            ${savedState ? 'SAVED' : 'UNSAVED'}
+                        </span>
+                    `;
+                    li.onclick = () => selectAnnotatorImage(img);
+                    container.appendChild(li);
+                });
+
+                if (data.images.length > 0) {
+                    selectAnnotatorImage(data.images[0]);
+                }
+            });
+        }
+
+        function selectAnnotatorImage(filename) {
+            document.querySelectorAll('#annotator-file-list .file-item').forEach(el => el.classList.remove('active'));
+            const activeItem = document.getElementById(`anno-item-${filename}`);
+            if (activeItem) activeItem.classList.add('active');
+
+            activeImageName = filename;
+            
+            fetch(`/process-image/${filename}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('thermal-view-img').src = data.thermal_src;
+                
+                // If label isn't inside standard map, dynamically register it into dropdown view bounds
+                const selectElement = document.getElementById('label-select');
+                if (data.suggested_id > 3 && !localCustomLabelMap[data.suggested_id]) {
+                    localCustomLabelMap[data.suggested_id] = data.suggested_label;
+                    const opt = document.createElement('option');
+                    opt.value = data.suggested_id;
+                    opt.innerText = `${data.suggested_label} (ID: ${data.suggested_id})`;
+                    selectElement.insertBefore(opt, selectElement.lastElementChild);
+                }
+                
+                selectElement.value = data.suggested_id;
+                activeBboxes = data.bboxes;
+                activeLabels = data.labels;
+
+                baseImageElement.src = `/mri_slices/${filename}`;
+                baseImageElement.onload = function() {
+                    const w = baseImageElement.naturalWidth || 400;
+                    const h = baseImageElement.naturalHeight || 400;
+                    
+                    bgCanvas.width = w;
+                    bgCanvas.height = h;
+                    annoCanvas.width = w;
+                    annoCanvas.height = h;
+                    containerBox.style.width = w + "px";
+                    containerBox.style.height = h + "px";
+                    
+                    bgCtx.clearRect(0, 0, w, h);
+                    bgCtx.drawImage(baseImageElement, 0, 0, w, h);
+                    
+                    redrawAnnotations();
+                };
+            });
+        }
+
+        function redrawAnnotations() {
+            annoCtx.clearRect(0, 0, annoCanvas.width, annoCanvas.height);
+            
+            activeBboxes.forEach((box, i) => {
+                const labelId = activeLabels[i];
+                
+                // Generates dynamic hash color lines for custom indices greater than 3
+                if (labelId > 3) {
+                    let r = (labelId * 45) % 200 + 55;
+                    let g = (labelId * 75) % 200 + 55;
+                    let b = (labelId * 115) % 200 + 55;
+                    annoCtx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+                } else {
+                    const colorMapping = { 0: "#22d3ee", 1: "#facc15", 2: "#ef4444", 3: "#ff0000" };
+                    annoCtx.strokeStyle = colorMapping[labelId] || "#ffffff";
+                }
+                
+                annoCtx.lineWidth = 2;
+                annoCtx.strokeRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+            });
+        }
+
+        annoCanvas.addEventListener('mousedown', function(e) {
+            const rect = annoCanvas.getBoundingClientRect();
+            const scaleX = annoCanvas.width / rect.width;
+            const scaleY = annoCanvas.height / rect.height;
+            startX = (e.clientX - rect.left) * scaleX;
+            startY = (e.clientY - rect.top) * scaleY;
+            isDrawing = true;
+        });
+
+        annoCanvas.addEventListener('mousemove', function(e) {
+            if (!isDrawing) return;
+            const rect = annoCanvas.getBoundingClientRect();
+            const scaleX = annoCanvas.width / rect.width;
+            const scaleY = annoCanvas.height / rect.height;
+            const currentX = (e.clientX - rect.left) * scaleX;
+            const currentY = (e.clientY - rect.top) * scaleY;
+
+            redrawAnnotations();
+            
+            const selectedClassId = parseInt(document.getElementById('label-select').value);
+            if (selectedClassId > 3) {
+                let r = (selectedClassId * 45) % 200 + 55;
+                let g = (selectedClassId * 75) % 200 + 55;
+                let b = (selectedClassId * 115) % 200 + 55;
+                annoCtx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+            } else {
+                const colorMapping = { 0: "#22d3ee", 1: "#facc15", 2: "#ef4444", 3: "#ff0000" };
+                annoCtx.strokeStyle = colorMapping[selectedClassId] || "#ffffff";
+            }
+            
+            annoCtx.lineWidth = 2;
+            annoCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
+        });
+
+        annoCanvas.addEventListener('mouseup', function(e) {
+            if (!isDrawing) return;
+            isDrawing = false;
+            
+            const rect = annoCanvas.getBoundingClientRect();
+            const scaleX = annoCanvas.width / rect.width;
+            const scaleY = annoCanvas.height / rect.height;
+            const endX = (e.clientX - rect.left) * scaleX;
+            const endY = (e.clientY - rect.top) * scaleY;
+
+            const x1 = Math.min(startX, endX);
+            const y1 = Math.min(startY, endY);
+            const x2 = Math.max(startX, endX);
+            const y2 = Math.max(startY, endY);
+
+            if ((x2 - x1) > 4 && (y2 - y1) > 4) {
+                activeBboxes = [[parseInt(x1), parseInt(y1), parseInt(x2), parseInt(y2)]];
+                activeLabels = [parseInt(document.getElementById('label-select').value)];
+            }
+            redrawAnnotations();
+        });
+
+        function saveActiveAnnotations() {
+            if (!activeImageName || isSavingCommit) return;
+            
+            isSavingCommit = true;
+            const saveBtn = document.getElementById('btn-save-anno');
+            saveBtn.disabled = true;
+            saveBtn.innerText = "Saving Parameters...";
+
+            const payload = {
+                image_name: activeImageName,
+                res: activeBboxes.map((box, i) => ({ bbox: box, label_id: activeLabels[i] })),
+                custom_labels: localCustomLabelMap // Pass runtime labels dictionary to store into file system json
+            };
+
+            fetch('/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert("Annotations saved successfully.");
+                    const badge = document.querySelector(`#anno-item-${activeImageName} .status-badge`);
+                    if (badge) {
+                        badge.className = "status-badge status-saved";
+                        badge.innerText = "SAVED";
+                    }
+                    dbCache[activeImageName] = payload.res;
+                } else {
+                    alert("Error saving coordinate payload.");
+                }
+            })
+            .finally(() => {
+                isSavingCommit = false;
+                saveBtn.disabled = false;
+                saveBtn.innerText = "Commit Annotations to Disk";
+            });
+        }
+
+        // =====================================================================
+        // LIGHTWEIGHT IN-MEMORY EVALUATION INFERENCE PIPELINE
+        // =====================================================================
+        function triggerLocalInference(taskType) {
+            const base64Data = localFilePayloads[taskType];
+            const fileInput = document.getElementById(`picker-${taskType}`);
+
+            if (!base64Data || !fileInput.files[0]) {
+                alert("Please select a scan image target file from your PC first.");
+                return;
+            }
+
+            const spinner = document.getElementById(`spinner-${taskType}`);
+            const outputImg = document.getElementById(`out-${taskType}-img`);
+            const runBtn = document.getElementById(`btn-run-${taskType}`);
+
+            spinner.style.display = "block";
+            outputImg.style.display = "none";
+            if (taskType === 'classification') document.getElementById('results-class').style.display = "none";
+            if (runBtn) runBtn.disabled = true;
+
+            fetch(`/evaluate_picked_file/${taskType}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    filename: fileInput.files[0].name,
+                    file_data: base64Data
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                spinner.style.display = "none";
+                if (data.status === 'success') {
+                    outputImg.src = data.output_image;
+                    outputImg.style.display = "block";
+
+                    if (taskType === 'classification') {
+                        document.getElementById('results-class').style.display = "block";
+                        document.getElementById('banner-class').innerText = `INFERENCE DETECTED: ${data.predicted_class.toUpperCase()} (${data.confidence})`;
+                        const table = document.getElementById('table-class');
+                        table.innerHTML = `<tr><th>Class Variant Name</th><th style="text-align:right;">Confidence Matrix</th></tr>`;
+                        for (const [cls, prob] of Object.entries(data.probability_map)) {
+                            table.innerHTML += `<tr><td>↳ ${cls}</td><td class="val">${prob}</td></tr>`;
+                        }
+                    }
+                } else {
+                    alert("Evaluation Pipeline Failed: " + data.message);
+                }
+            })
+            .catch(err => {
+                spinner.style.display = "none";
+                console.error(err);
+                alert("Server execution error occurred.");
+            })
+            .finally(() => {
+                if (runBtn) runBtn.disabled = false;
+            });
+        }
+    </script>
+</body>
+</html>
